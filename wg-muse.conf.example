@@ -1,0 +1,14 @@
+# CONTOH — JANGAN pakai file ini apa adanya.
+# Isi nilai dari .conf yang dibuat di panel WireGuard (Tambah Device).
+# Satu Muse = satu peer = satu private key + satu IP. Jangan pernah pakai
+# .conf milik Muse lain.
+[Interface]
+PrivateKey = <PRIVATE-KEY-DARI-PANEL>
+Address = 10.200.200.X/32
+MTU = 1420
+
+[Peer]
+PublicKey = 3oC/jW09LsLEXcB/3r9CoZlBFL2yl0rhvPlZoYeL3gI=
+Endpoint = 217.216.146.111:51821
+AllowedIPs = 10.200.200.0/24, 192.168.200.0/24
+PersistentKeepalive = 25
