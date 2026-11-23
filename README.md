@@ -120,7 +120,10 @@ tunnel hidup lagi sesudah VM diganti / proses mati, pasang cron interval
 
 ## Relay Cloud D (SUDAH terpasang — hanya bila perlu pasang ulang)
 
-Relay ini **satu untuk semua Muse**. Jangan install per Muse.
+Relay ini **satu untuk semua Muse**. Jangan install per Muse. Sejak
+perbaikan 23 Nov 2026, relay melayani banyak Muse bersamaan di port yang
+sama (satu thread + satu socket UDP per koneksi TCP) — tidak perlu relay
+kedua per Muse.
 
 ```bash
 # di Cloud D sebagai root:

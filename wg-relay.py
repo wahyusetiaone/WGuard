@@ -10,8 +10,12 @@ The relay chain is:
     <-> relay-C  stream2udp  (Cloud D, TCP <-> UDP 127.0.0.1:51821 = wg0)
 
 Stream framing: 4-byte big-endian length + payload. One datagram = one frame.
-Only one WG peer per relay instance; UDP replies go to the last-seen sender.
-On any stream error the process exits non-zero so a supervisor can restart it.
+stream2udp serves MULTIPLE clients at once: each TCP connection gets its own
+thread and its own UDP socket, so replies from wg0 can only belong to the
+client that owns that socket (no demultiplexing needed). udp2stream is still
+single-peer (replies go to the last-seen sender).
+On any stream error the bridge for that client ends; the relay keeps serving
+the others. The process exits non-zero only on a fatal listen/bind error.
 """
 import argparse
 import socket
@@ -187,6 +191,25 @@ def run_stream2stream(a_spec, b_spec):
         time.sleep(1)
 
 
+def serve_stream2udp_client(conn, addr, uhost, uport):
+    """Serve one TCP client: own UDP socket so wg0 replies route back here."""
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(("127.0.0.1", 0))
+    try:
+        run_bridge(udp_sock=udp, udp_target=(uhost, uport), is_server_side=False,
+                   stream_sock=conn)
+    finally:
+        try:
+            conn.close()
+        except OSError:
+            pass
+        try:
+            udp.close()
+        except OSError:
+            pass
+        log(f"stream peer {addr} disconnected")
+
+
 def run_stream2udp(stream_spec, udp_spec):
     _, host, port = parse_addr(stream_spec)
     assert parse_addr(stream_spec)[0] == "tcp-listen"
@@ -194,20 +217,14 @@ def run_stream2udp(stream_spec, udp_spec):
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind((host, port))
-    srv.listen(1)
-    log(f"TCP listening on {host}:{port}")
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp.bind(("127.0.0.1", 0))
+    srv.listen(16)
+    log(f"TCP listening on {host}:{port} (multi-client)")
     while True:
         conn, addr = srv.accept()
         log(f"stream peer connected from {addr}")
-        run_bridge(udp_sock=udp, udp_target=(uhost, uport), is_server_side=False,
-                    stream_sock=conn)
-        try:
-            conn.close()
-        except OSError:
-            pass
-        log("waiting for next stream peer")
+        t = threading.Thread(target=serve_stream2udp_client,
+                             args=(conn, addr, uhost, uport), daemon=True)
+        t.start()
 
 
 def run_bridge(udp_sock, udp_target, is_server_side, stream_sock):
